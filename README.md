@@ -1,11 +1,24 @@
-# Notify Card for Lovelace/Home Assistant
+# Multi-Notify Card for Lovelace/Home Assistant
+Forked from https://github.com/bernikr/lovelace-notify-card.
 
-[!["Buy Me A Coffee"](https://img.shields.io/static/v1?label=donate&message=buymeacoffe&color=FFDD00&logo=buymeacoffee&style=flat-square)](https://buymeacoffee.com/bernikr)
-[!["Chat on Telegram"](https://img.shields.io/static/v1?label=chat&message=Telegram&color=26A5E4&logo=telegram&style=flat-square)](https://t.me/bernikr)
+[!["Buy bernikr A Coffee"](https://img.shields.io/static/v1?label=donate&message=buymeacoffe&color=FFDD00&logo=buymeacoffee&style=flat-square)](https://buymeacoffee.com/bernikr)
+[!["Chat with bernikr on Telegram"](https://img.shields.io/static/v1?label=chat&message=Telegram&color=26A5E4&logo=telegram&style=flat-square)](https://t.me/bernikr)
 
 This simple card allows you to notify any notification service manually from the dashboard.
 
-![card](card.jpg)
+![card](card.png)
+
+## Manual HACS Installation Instructions
+You must manually add this repository to HACS and install the component:
+
+1. Open HACS in Home Assistant
+2. Navigate to "Frontend" section
+3. In the top right corner, click on the three dots and select "Custom repositories"
+4. In the dialog that appears, paste the URL of this repository (https://github.com/imonlinux/lovelace-multiselect-notify-card) into the 'Repository' field
+5. Select 'Frontend' as the category
+6. Click 'Add'
+
+Once installed, you can proceed with the configuration steps as outlined in this README.
 
 ## Install
 ### Install via HACS
