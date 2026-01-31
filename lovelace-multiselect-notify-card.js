@@ -10,19 +10,19 @@
  *     - entity: mobile_app_phone
  *       label: Phone
  *
- * New preferred format:
+ * Preferred config keys:
+ *   card_title: string
+ *   notification_title: string
+ *   message_placeholder: string   (legacy: label)
  *   targets:
- *     - service: mobile_app_phone        # notify.<service>
- *       label: Phone
- *   # or full service:
- *     - service: script.notify_tv        # domain.service
+ *     - service: mobile_app_phone       # notify.<service>
+ *       label: Friendly Name (optional)
+ *     - service: script.notify_tv       # full domain.service
  */
 
 (() => {
   // ---- HA/Lit bootstrapping (no external imports) ----
   const getHaLit = () => {
-    // Common pattern used by many custom cards: HA already bundles Lit, but doesn't expose it as an import.
-    // We extract the base class + template helpers from an existing HA element.
     const base =
       customElements.get("ha-panel-lovelace") ||
       customElements.get("hui-view") ||
@@ -38,11 +38,11 @@
 
   const lit = getHaLit();
   if (!lit) {
-    // If HA hasn't defined core elements yet, defer registration.
     console.warn("[multiselect-notify-card] HA base elements not ready; card may load later.");
   }
   const LitElement = lit?.LitElement ?? HTMLElement;
-  const html = lit?.html ?? ((strings, ...vals) => strings.reduce((a, s, i) => a + s + (vals[i] ?? ""), ""));
+  const html =
+    lit?.html ?? ((strings, ...vals) => strings.reduce((a, s, i) => a + s + (vals[i] ?? ""), ""));
   const css = lit?.css ?? (() => "");
 
   // ---- Helpers ----
@@ -53,6 +53,56 @@
       composed: options.composed ?? true,
     });
     node.dispatchEvent(event);
+  };
+
+  const titleCase = (str) =>
+    (str || "")
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
+  // Turn "mobile_app_august_phone" -> "August Phone"
+  const humanizeNotifyServiceId = (svc) => {
+    if (!svc) return "";
+    let s = String(svc);
+    if (s.startsWith("mobile_app_")) s = s.slice("mobile_app_".length);
+    s = s.replace(/_/g, " ").trim();
+    return titleCase(s);
+  };
+
+  const isFullService = (svc) => typeof svc === "string" && svc.includes(".");
+  const parseService = (svc) => {
+    if (!svc) return null;
+    if (isFullService(svc)) {
+      const [domain, service] = svc.split(".", 2);
+      if (!domain || !service) return null;
+      return { domain, service };
+    }
+    return { domain: "notify", service: svc };
+  };
+
+  // Best-effort friendly name:
+  // - If HA provides a .name for the notify service, use it
+  // - Else derive from the service id
+  const inferFriendlyName = (hass, storedService) => {
+    const parsed = parseService(storedService);
+    if (!parsed) return storedService || "";
+
+    // For notify domain, the editor stores just the service key ("mobile_app_x")
+    // For other domains, storedService is "domain.service"
+    if (parsed.domain === "notify") {
+      const desc = hass?.services?.notify?.[parsed.service];
+      const provided = desc?.name;
+      if (provided && typeof provided === "string" && provided.trim()) {
+        return provided.trim();
+      }
+      return humanizeNotifyServiceId(parsed.service) || parsed.service;
+    }
+
+    // Non-notify services: fallback to simple humanize
+    const raw = `${parsed.domain}.${parsed.service}`.replace(/\./g, " ").replace(/_/g, " ");
+    return titleCase(raw);
   };
 
   const normalizeTargets = (targets) => {
@@ -73,7 +123,6 @@
         })
         .filter((t) => t && t.service);
     }
-    // If someone used a single string/object by mistake, try to coerce.
     if (typeof targets === "string") return [{ service: targets, label: "" }];
     if (typeof targets === "object") {
       const service = targets.service ?? targets.entity ?? "";
@@ -81,19 +130,6 @@
       return [{ service, label: targets.label ?? "" }];
     }
     return [];
-  };
-
-  const isFullService = (svc) => typeof svc === "string" && svc.includes(".");
-  const parseService = (svc) => {
-    // Returns {domain, service}
-    if (!svc) return null;
-    if (isFullService(svc)) {
-      const [domain, service] = svc.split(".", 2);
-      if (!domain || !service) return null;
-      return { domain, service };
-    }
-    // default notify domain
-    return { domain: "notify", service: svc };
   };
 
   // ---- Card ----
@@ -115,7 +151,7 @@
     static getStubConfig() {
       return {
         card_title: "Send Notification",
-        label: "Notification Text",
+        message_placeholder: "Enter your message",
         notification_title: "Home Assistant Notification",
         targets: [],
       };
@@ -167,25 +203,23 @@
 
     setConfig(config) {
       const targets = normalizeTargets(config?.targets);
-      if (!targets || targets.length === 0) {
-        // Allow empty targets so user can add card and configure via GUI editor.
-        // But keep a warning-like error for YAML users who expect it to work immediately.
-        console.warn("[multiselect-notify-card] No targets configured yet.");
-      }
+
+      // Prefer message_placeholder, but keep legacy label as fallback
+      const messagePlaceholder = config?.message_placeholder ?? config?.label ?? "Enter your message";
 
       this._config = {
         card_title: "Send Notification",
-        label: "Notification Text",
         notification_title: "Home Assistant Notification",
+        message_placeholder: messagePlaceholder,
+        // keep legacy key around (some users still edit YAML)
+        label: config?.label ?? messagePlaceholder,
         ...config,
         targets,
       };
 
-      // Initialize fields
       this._title = this._config.notification_title ?? "Home Assistant Notification";
       this._message = "";
 
-      // Selection state
       const set = new Set((this._config.targets ?? []).map((t) => t.service).filter(Boolean));
       this._selected = set;
     }
@@ -214,7 +248,6 @@
     }
 
     _onMessageKeydown(ev) {
-      // Ctrl+Enter to send
       if (ev.code === "Enter" && ev.ctrlKey) {
         ev.preventDefault();
         this._send();
@@ -252,7 +285,8 @@
       if (!this._config) return html``;
 
       const header = this._config.card_title ?? "Send Notification";
-      const placeholder = this._config.label ?? "Notification Text";
+      const messagePlaceholder =
+        this._config.message_placeholder ?? this._config.label ?? "Enter your message";
       const targets = this._config.targets ?? [];
 
       return html`
@@ -265,8 +299,11 @@
                   </div>`
                 : targets.map((t) => {
                     const svc = t.service;
-                    const label = t.label || svc;
                     const checked = (this._selected ?? new Set()).has(svc);
+
+                    // AUTO-friendly name if label not set
+                    const displayName = t.label?.trim() || inferFriendlyName(this.hass, svc) || svc;
+
                     return html`
                       <div class="target-row">
                         <ha-checkbox
@@ -274,7 +311,7 @@
                           data-service=${svc}
                           @change=${this._onToggleTarget}
                         ></ha-checkbox>
-                        <div class="target-label">${label}</div>
+                        <div class="target-label">${displayName}</div>
                       </div>
                     `;
                   })}
@@ -290,7 +327,8 @@
 
             <div>
               <ha-textarea
-                label=${placeholder}
+                label="Message"
+                placeholder=${messagePlaceholder}
                 .value=${this._message ?? ""}
                 @input=${this._onMessageInput}
                 @keydown=${this._onMessageKeydown}
@@ -348,6 +386,10 @@
           opacity: 0.9;
         }
 
+        .name {
+          font-size: 1em;
+        }
+
         .grow {
           flex: 1;
         }
@@ -386,25 +428,38 @@
     }
 
     setConfig(config) {
+      const targets = normalizeTargets(config?.targets);
+
+      // Prefer message_placeholder, but keep legacy label as fallback
+      const messagePlaceholder = config?.message_placeholder ?? config?.label ?? "Enter your message";
+
       this._config = {
         card_title: "Send Notification",
-        label: "Notification Text",
         notification_title: "Home Assistant Notification",
+        message_placeholder: messagePlaceholder,
+        // keep legacy key too for compatibility
+        label: config?.label ?? messagePlaceholder,
         ...config,
-        targets: normalizeTargets(config?.targets),
+        targets,
       };
+
       this._filter = "";
       this._customService = "";
     }
 
     _emitConfigChanged(newConfig) {
       this._config = newConfig;
-      // HA expects config-changed events for editor changes. :contentReference[oaicite:3]{index=3}
       fireEvent(this, "config-changed", { config: newConfig });
     }
 
     _updateField(field, value) {
       const next = { ...this._config, [field]: value };
+
+      // Keep legacy label in sync with message_placeholder so older YAML/configs behave the same.
+      if (field === "message_placeholder") {
+        next.label = value;
+      }
+
       this._emitConfigChanged(next);
     }
 
@@ -425,7 +480,9 @@
       if (idx >= 0) {
         targets.splice(idx, 1);
       } else {
-        targets.push({ service, label: "" });
+        // Auto-friendly label on add (still editable)
+        const friendly = inferFriendlyName(this.hass, service);
+        targets.push({ service, label: friendly });
       }
 
       this._emitConfigChanged({ ...this._config, targets });
@@ -447,7 +504,6 @@
       let svc = raw;
       if (raw.startsWith("notify.")) svc = raw.slice("notify.".length);
 
-      // For notify domain we store just the service part, for other domains store full domain.service
       const parsed = parseService(svc);
       if (!parsed) return;
 
@@ -455,7 +511,8 @@
 
       const targets = [...(this._config.targets ?? [])];
       if (!targets.some((t) => t.service === stored)) {
-        targets.push({ service: stored, label: "" });
+        const friendly = inferFriendlyName(this.hass, stored);
+        targets.push({ service: stored, label: friendly });
         this._emitConfigChanged({ ...this._config, targets });
       }
 
@@ -484,8 +541,8 @@
 
             <ha-textfield
               label="Message Placeholder"
-              .value=${this._config.label ?? ""}
-              @input=${(e) => this._updateField("label", e.target.value)}
+              .value=${this._config.message_placeholder ?? ""}
+              @input=${(e) => this._updateField("message_placeholder", e.target.value)}
             ></ha-textfield>
 
             <ha-textfield
@@ -498,8 +555,7 @@
           <div class="section">
             <div class="hint">
               Select which <span class="svc">notify.*</span> services should be available on the card.
-              These are discovered from <span class="svc">hass.services.notify</span>.
-              You can also add a custom full service (e.g. <span class="svc">script.notify_tv</span>).
+              Friendly names are inferred automatically; you can still override them.
             </div>
 
             <ha-textfield
@@ -513,22 +569,27 @@
                 ? html`<div class="hint">No notify services found (or filtered out).</div>`
                 : filtered.map((svc) => {
                     const checked = selected.has(svc);
-                    const currentLabel =
-                      (this._config.targets ?? []).find((t) => t.service === svc)?.label ?? "";
+                    const current = (this._config.targets ?? []).find((t) => t.service === svc);
+                    const inferred = inferFriendlyName(this.hass, svc);
+                    const currentLabel = current?.label ?? inferred;
+
                     return html`
                       <div class="svc-item">
                         <ha-checkbox
                           .checked=${checked}
                           @change=${() => this._toggleNotifyService(svc)}
                         ></ha-checkbox>
+
                         <div class="grow">
+                          <div class="name">${inferred}</div>
                           <div class="svc">${svc}</div>
                         </div>
+
                         ${checked
                           ? html`
                               <ha-textfield
                                 class="label-input"
-                                label="Label (optional)"
+                                label="Label override (optional)"
                                 .value=${currentLabel}
                                 @input=${(e) => this._setTargetLabel(svc, e.target.value)}
                               ></ha-textfield>
@@ -561,7 +622,7 @@
   customElements.define("lovelace-multiselect-notify-card", LovelaceMultiSelectNotifyCard);
   customElements.define("lovelace-multiselect-notify-card-editor", LovelaceMultiSelectNotifyCardEditor);
 
-  // Card picker metadata (nice-to-have)
+  // Card picker metadata
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: "lovelace-multiselect-notify-card",
