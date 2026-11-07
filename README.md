@@ -13,8 +13,9 @@ with a visual editor for picking targets.
 v1 stopped rendering on Home Assistant 2026.11: the frontend removed its
 Material Web Components dependency (`mwc-*`), which this card was built on.
 v2 is a full rewrite on [Lit](https://lit.dev) against the current frontend
-component set (`ha-card`, `ha-checkbox`, `ha-input`, `ha-textarea`,
-`ha-button`) and adds a GUI editor. Config from v1 keeps working; see
+component set (`ha-card`, `ha-checkbox`, `ha-input`, `ha-button`) and adds a
+GUI editor. The message box is a native textarea (styled to match), because
+`ha-textarea` is not loaded on dashboards. Config from v1 keeps working; see
 [Migrating from v1](#migrating-from-v1).
 
 Requires Home Assistant 2026.11 or later.

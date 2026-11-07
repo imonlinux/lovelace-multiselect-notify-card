@@ -54,9 +54,31 @@ export class MultiSelectNotifyCard extends LitElement {
       color: var(--secondary-text-color);
       padding: 4px 0;
     }
-    ha-input,
-    ha-textarea {
+    ha-input {
       width: 100%;
+    }
+    .message {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 96px;
+      padding: 12px 12px 10px;
+      border: 1px solid var(--divider-color);
+      border-radius: var(--ha-border-radius-md, 10px);
+      background: var(
+        --ha-color-form-background,
+        var(--secondary-background-color, transparent)
+      );
+      color: var(--primary-text-color);
+      font: inherit;
+      line-height: 1.4;
+      resize: vertical;
+      outline: none;
+    }
+    .message::placeholder {
+      color: var(--secondary-text-color);
+    }
+    .message:focus {
+      border-color: var(--primary-color);
     }
     .error {
       color: var(--error-color);
@@ -211,13 +233,17 @@ export class MultiSelectNotifyCard extends LitElement {
             @input=${this._onTitle}
           ></ha-input>
 
-          <ha-textarea
-            label="Message"
+          <!-- Native textarea: ha-textarea is not defined on dashboards (HA
+               lazy-loads it only for config dialogs), so a custom card cannot
+               rely on it. Styled below to match the HA form look. -->
+          <textarea
+            class="message"
             placeholder=${config.message_placeholder ?? DEFAULT_MESSAGE_PLACEHOLDER}
             .value=${this._message}
             @input=${this._onMessage}
             @keydown=${this._onKeydown}
-          ></ha-textarea>
+            rows="4"
+          ></textarea>
 
           ${this._error
             ? html`<div class="error">
