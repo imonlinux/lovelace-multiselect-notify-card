@@ -1,0 +1,25 @@
+{
+  "name": "lovelace-multiselect-notify-card",
+  "version": "2.0.0",
+  "description": "Home Assistant card to send notifications to one or more notify targets, with a visual editor.",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --minify --format=iife --target=es2020 --outfile=dist/lovelace-multiselect-notify-card.js",
+    "watch": "esbuild src/main.ts --bundle --format=iife --target=es2020 --outfile=dist/lovelace-multiselect-notify-card.js --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "home-assistant",
+    "homeassistant",
+    "lovelace",
+    "custom-card"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "lit": "^3.3.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3"
+  }
+}
