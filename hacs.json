@@ -1,5 +1,5 @@
 {
   "name": "Multi-Notify Card",
-  "filename": "dist/lovelace-multiselect-notify-card.js",
+  "filename": "lovelace-multiselect-notify-card.js",
   "render_readme": true
 }
